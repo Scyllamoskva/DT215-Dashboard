@@ -68,9 +68,10 @@
 </div>
 
 <script>
-  // GANTI baris di bawah ini dengan URL Web App Apps Script kamu sendiri
-  // (yang diakhiri /exec), sebelum upload file ini ke GitHub Pages.
-  var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyZpbp7q5wMZ0ZLrKq1qJVKmZ5ght4keUfxrWhaaGVaMPK1c3IBd5wfgdkVEuflcRBX/exec';
+  // GANTI baris di bawah ini dengan URL Cloudflare Worker kamu
+  // (contoh: https://dt215-proxy.namamu.workers.dev), sebelum upload file ini ke GitHub Pages.
+  // Ini BUKAN URL Apps Script langsung - itu tetap disimpan di dalam kode Worker-nya.
+  var PROXY_URL = 'https://dt215-proxy.abdurrachmanaldy.workers.dev/';
 
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
@@ -88,21 +89,15 @@
     return sign + 'Rp' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   }
 
-  function jsonpCall(params, onDone) {
-    var callbackName = 'dtcb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-    var script = document.createElement('script');
-    window[callbackName] = function (data) {
-      document.body.removeChild(script);
-      delete window[callbackName];
-      onDone(data);
-    };
-    script.onerror = function () {
-      onDone({ ok: false, message: 'Gagal menghubungi Apps Script. Cek APPS_SCRIPT_URL sudah benar & sudah di-deploy.' });
-    };
-    var qs = 'callback=' + callbackName + '&initData=' + encodeURIComponent(tg.initData);
+  function apiCall(params, onDone) {
+    var qs = 'initData=' + encodeURIComponent(tg.initData);
     Object.keys(params).forEach(function (k) { qs += '&' + k + '=' + encodeURIComponent(params[k]); });
-    script.src = APPS_SCRIPT_URL + '?' + qs;
-    document.body.appendChild(script);
+    fetch(PROXY_URL + '?' + qs)
+      .then(function (res) { return res.json(); })
+      .then(onDone)
+      .catch(function () {
+        onDone({ ok: false, message: 'Gagal menghubungi server. Cek PROXY_URL sudah benar & Worker sudah di-deploy.' });
+      });
   }
 
   function drawDonut(kategoriList) {
@@ -216,7 +211,7 @@
   }
 
   function loadTrend() {
-    jsonpCall({ action: 'trend', granularity: state.granularity }, function (res) {
+    apiCall({ action: 'trend', granularity: state.granularity }, function (res) {
       if (res.ok) drawTrend(res.trend);
     });
   }
@@ -224,7 +219,7 @@
   function loadSummary(bulan, tahun) {
     var params = {};
     if (bulan && tahun) { params.bulan = bulan; params.tahun = tahun; }
-    jsonpCall(params, function (data) {
+    apiCall(params, function (data) {
       if (!data.ok) { showError(data.message || 'Gagal memuat data.'); return; }
       render(data);
     });
@@ -235,8 +230,8 @@
       showError('Buka dashboard ini lewat tombol Dashboard di bot Telegram-nya ya.');
       return;
     }
-    if (APPS_SCRIPT_URL.indexOf('PASTE_URL') !== -1) {
-      showError('APPS_SCRIPT_URL belum diisi di file ini.');
+    if (PROXY_URL.indexOf('PASTE_URL') !== -1) {
+      showError('PROXY_URL belum diisi di file ini.');
       return;
     }
     loadSummary();
@@ -246,4 +241,3 @@
 </script>
 </body>
 </html>
-FRENTEND_EOF_MARKER_UNUSED
