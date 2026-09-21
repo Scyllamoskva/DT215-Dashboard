@@ -56,6 +56,19 @@
   .trend-legend{display:flex;gap:16px;justify-content:center;margin-top:10px;font-size:11.5px;}
   .trend-legend span{display:flex;align-items:center;gap:6px;color:var(--cream-dim);}
   .trend-legend .garis{width:14px;height:2px;border-radius:2px;}
+  .legend-item{cursor:pointer;}
+  .legend-item:active{opacity:0.6;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;display:flex;align-items:flex-end;}
+  .modal-panel{background:var(--bg);width:100%;max-height:75vh;overflow-y:auto;border-radius:16px 16px 0 0;padding:18px 16px 28px;}
+  .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .modal-header h2{font-family:'Fraunces',serif;font-size:18px;margin:0;color:var(--cream);}
+  .modal-close{background:var(--surface);border:none;color:var(--cream-dim);width:28px;height:28px;border-radius:50%;font-size:16px;cursor:pointer;}
+  .trx-item{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line);}
+  .trx-item .trx-info{min-width:0;}
+  .trx-item .trx-tgl{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--cream-dim);}
+  .trx-item .trx-ket{font-size:13.5px;color:var(--cream);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .trx-item .trx-nominal{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--gold);white-space:nowrap;}
+  .trx-empty{text-align:center;color:var(--cream-dim);font-size:13px;padding:20px 0;}
   footer{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--cream-dim);margin-top:26px;letter-spacing:.05em;}
   .center-msg{padding:70px 24px;text-align:center;font-size:14px;line-height:1.6;color:var(--cream-dim);}
   .spinner{width:22px;height:22px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;margin:0 auto 14px;animation:spin 0.8s linear infinite;}
@@ -108,6 +121,7 @@
       row.innerHTML = '<span class="dot" style="background:' + d.warna + '"></span>' +
         '<span class="nama">' + d.nama + '</span>' +
         '<span class="nominal">' + formatRupiah(d.total) + '</span>';
+      row.addEventListener('click', function () { showTransaksiKategori(d.nama); });
       legend.appendChild(row);
     });
     var ctx = document.getElementById('chart').getContext('2d');
@@ -122,6 +136,41 @@
     });
     ctx.beginPath(); ctx.arc(cx, cy, 32, 0, Math.PI * 2);
     ctx.fillStyle = '#20242f'; ctx.fill();
+  }
+
+  function showTransaksiKategori(namaKategori) {
+    var overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML =
+      '<div class="modal-panel">' +
+        '<div class="modal-header"><h2>' + namaKategori + '</h2><button class="modal-close">✕</button></div>' +
+        '<div class="trx-empty">Memuat...</div>' +
+      '</div>';
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) document.body.removeChild(overlay); });
+    overlay.querySelector('.modal-close').addEventListener('click', function () { document.body.removeChild(overlay); });
+    document.body.appendChild(overlay);
+
+    apiCall({ action: 'transaksi', kategori: namaKategori, bulan: state.bulan, tahun: state.tahun }, function (res) {
+      var panel = overlay.querySelector('.modal-panel');
+      if (!res.ok) {
+        panel.querySelector('.trx-empty').textContent = res.message || 'Gagal memuat.';
+        return;
+      }
+      if (!res.transaksi || res.transaksi.length === 0) {
+        panel.querySelector('.trx-empty').textContent = 'Belum ada transaksi di kategori ini bulan ini.';
+        return;
+      }
+      var html = '<div class="modal-header"><h2>' + namaKategori + '</h2><button class="modal-close">✕</button></div>';
+      res.transaksi.forEach(function (t) {
+        html +=
+          '<div class="trx-item"><div class="trx-info">' +
+            '<div class="trx-tgl">' + t.tanggal + (t.subKategori ? ' · ' + t.subKategori : '') + '</div>' +
+            '<div class="trx-ket">' + (t.keterangan || '(tanpa keterangan)') + '</div>' +
+          '</div><div class="trx-nominal">' + formatRupiah(t.nominal) + '</div></div>';
+      });
+      panel.innerHTML = html;
+      panel.querySelector('.modal-close').addEventListener('click', function () { document.body.removeChild(overlay); });
+    });
   }
 
   function drawTrend(trend) {
